@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>烟花外箱 3D 效果图</title>
+<style>
+  :root{
+    --bg:#14141a; --panel:#1c1c24; --panel-2:#252530; --line:#33333f;
+    --text:#ececf1; --muted:#9a9aab; --accent:#ff8a3d; --accent-ink:#1a0d03;
+  }
+  *{box-sizing:border-box}
+  html,body{height:100%;margin:0}
+  body{background:var(--bg);color:var(--text);font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+  .app{display:grid;grid-template-columns:1fr 316px;height:100vh;height:100dvh}
+  .stage{position:relative;min-width:0;min-height:0;overflow:hidden}
+  #c{position:absolute;inset:0;width:100%;height:100%;display:block;touch-action:none;cursor:grab}
+  #c:active{cursor:grabbing}
+  .hint{position:absolute;left:16px;bottom:14px;padding:6px 10px;border-radius:8px;background:rgba(0,0,0,.45);color:#fff;font-size:12px;backdrop-filter:blur(6px);pointer-events:none}
+  .title{position:absolute;left:16px;top:14px;padding:6px 12px;border-radius:8px;background:rgba(0,0,0,.45);color:#fff;font-weight:600;backdrop-filter:blur(6px);pointer-events:none}
+  .title small{font-weight:400;opacity:.7;margin-left:6px}
+  .drop{position:absolute;inset:12px;border:2px dashed var(--accent);border-radius:14px;background:rgba(255,138,61,.12);display:none;align-items:center;justify-content:center;font-size:18px;color:#fff;pointer-events:none}
+  .stage.dragging .drop{display:flex}
+  .loading{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;background:rgba(0,0,0,.35);font-size:15px;transition:opacity .3s}
+  .loading.off{opacity:0;pointer-events:none}
+
+  .panel{background:var(--panel);border-left:1px solid var(--line);overflow-y:auto;padding:16px 16px 28px}
+  .panel h2{font-size:12px;letter-spacing:.08em;color:var(--muted);font-weight:600;margin:20px 0 10px}
+  .panel h2:first-child{margin-top:0}
+  .row{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0}
+  .row label{color:var(--text)}
+  .row .val{color:var(--muted);font-variant-numeric:tabular-nums;min-width:2.5em;text-align:right}
+  .thumb{display:flex;gap:10px;align-items:center}
+  .thumb img{width:92px;height:68px;object-fit:cover;border-radius:8px;border:1px solid var(--line);background:#000}
+  .thumb .meta{font-size:12px;color:var(--muted);min-width:0}
+  .thumb .meta b{display:block;color:var(--text);font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  button,.btn{font:inherit;color:var(--text);background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 12px;cursor:pointer;transition:background .15s,border-color .15s}
+  button:hover,.btn:hover{background:#2e2e3b}
+  button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+  .btn-primary{background:var(--accent);color:var(--accent-ink);border-color:transparent;font-weight:600}
+  .btn-primary:hover{background:#ff9d5c}
+  .btns{display:flex;gap:8px;flex-wrap:wrap}
+  .seg{display:flex;background:var(--panel-2);border:1px solid var(--line);border-radius:9px;padding:3px;gap:2px}
+  .seg button{flex:1;border:0;background:transparent;padding:5px 8px;border-radius:6px;color:var(--muted)}
+  .seg button.on{background:var(--accent);color:var(--accent-ink);font-weight:600}
+  .dims{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+  .dims label{font-size:12px;color:var(--muted);display:block}
+  .dims input{width:100%;margin-top:3px;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:8px;padding:6px 8px;font:inherit}
+  input[type=range]{width:100%;accent-color:var(--accent);margin:2px 0 6px}
+  .sw{display:flex;gap:8px}
+  .sw button{width:30px;height:30px;padding:0;border-radius:50%;border:2px solid var(--line)}
+  .sw button.on{border-color:var(--accent)}
+  .toggle{position:relative;width:40px;height:23px;flex:none}
+  .toggle input{opacity:0;position:absolute;inset:0;margin:0;cursor:pointer;z-index:1}
+  .toggle i{position:absolute;inset:0;background:var(--panel-2);border:1px solid var(--line);border-radius:99px;transition:.15s}
+  .toggle i::after{content:"";position:absolute;top:2px;left:2px;width:17px;height:17px;border-radius:50%;background:#aaa;transition:.15s}
+  .toggle input:checked + i{background:var(--accent);border-color:transparent}
+  .toggle input:checked + i::after{left:19px;background:#fff}
+  .toggle input:focus-visible + i{outline:2px solid var(--accent);outline-offset:2px}
+  .note{font-size:12px;color:var(--muted);margin:8px 0 0}
+  .sub{opacity:1;transition:opacity .15s}
+  .sub.off{opacity:.4;pointer-events:none}
+
+  .layer{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px;margin:8px 0}
+  .lhead{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:8px}
+  .lstate{font-size:12px;color:var(--muted);text-align:right;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .lstate.warn{color:#ffb35c}
+  .layer .btn,.layer button{padding:4px 12px;font-size:13px}
+  select{font:inherit;color:var(--text);background:var(--panel-2);border:1px solid var(--line);border-radius:8px;padding:7px 8px;max-width:150px}
+  dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:14px;padding:14px;max-width:min(94vw,1000px)}
+  dialog::backdrop{background:rgba(0,0,0,.6)}
+  .dlgHead{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px}
+  #dlgCanvas{width:100%;height:auto;display:block;border-radius:8px;background:#fff}
+  @media (max-width:760px){
+    .app{grid-template-columns:1fr;grid-template-rows:minmax(0,1fr) 44vh}
+    .panel{border-left:0;border-top:1px solid var(--line)}
+    .hint{display:none}
+  }
+</style>
+<script type="importmap">
+{"imports":{"three":"./vendor/three/three.module.js","three/addons/":"./vendor/three/addons/"}}
+</script>
+</head>
+<body>
+<div class="app">
+  <main class="stage" id="stage">
+    <canvas id="c" aria-label="3D 箱子预览，可拖动旋转"></canvas>
+    <div class="title">烟花外箱 · 3D 效果图<small>原型 v0.1</small></div>
+    <div class="hint">拖动旋转 · 滚轮缩放 · 右键平移 · 把图片拖进来可替换设计</div>
+    <div class="drop">松开以替换设计图</div>
+    <div class="loading" id="loading">正在加载设计图…</div>
+  </main>
+
+  <aside class="panel">
+    <h2>设计图</h2>
+    <div class="thumb">
+      <img id="thumb" alt="当前设计图">
+      <div class="meta"><b id="thumbName">示例：钱多多</b><span id="thumbSize"></span></div>
+    </div>
+    <div class="btns" style="margin-top:10px">
+      <label class="btn btn-primary" for="file">上传设计图</label>
+      <input id="file" type="file" accept="image/png,image/jpeg,image/webp" hidden>
+      <select id="sample" aria-label="示例设计"><option value="0">示例：钱多多</option><option value="1">示例：发财雷王</option></select>
+    </div>
+    <p class="note" id="layoutNote"></p>
+    <button id="viewLayout" style="margin-top:8px">查看贴图对位</button>
+
+    <h2>箱子尺寸（mm）</h2>
+    <div class="dims">
+      <div><label for="dL">长</label><input id="dL" type="number" min="100" max="900" step="5"></div>
+      <div><label for="dW">宽</label><input id="dW" type="number" min="100" max="900" step="5"></div>
+      <div><label for="dH">高</label><input id="dH" type="number" min="100" max="900" step="5"></div>
+    </div>
+
+    <h2>表面工艺</h2>
+    <div class="row"><label>覆膜</label></div>
+    <div class="seg" id="film">
+      <button data-v="matte" class="on">哑膜</button>
+      <button data-v="gloss">亮膜</button>
+      <button data-v="none">无膜</button>
+    </div>
+
+    <div class="row" style="margin-top:16px"><label for="foil">烫金</label>
+      <span class="toggle"><input type="checkbox" id="foil" checked><i></i></span></div>
+    <div class="sub" id="foilSub">
+      <div class="row" style="margin:6px 0 0"><label for="foilRange">识别范围</label><span class="val" id="foilRangeV"></span></div>
+      <input type="range" id="foilRange" min="0" max="100" value="30">
+      <div class="row" style="margin:6px 0 0"><label for="foilStr">金属感</label><span class="val" id="foilStrV"></span></div>
+      <input type="range" id="foilStr" min="20" max="100" value="75">
+    </div>
+
+    <div class="row"><label for="uv">局部 UV</label>
+      <span class="toggle"><input type="checkbox" id="uv" checked><i></i></span></div>
+    <div class="row" style="margin-top:14px"><label>烫印颜色</label></div>
+    <div class="seg" id="tint">
+      <button data-v="gold" class="on">烫金</button>
+      <button data-v="silver">烫银</button>
+      <button data-v="rose">玫瑰金</button>
+    </div>
+
+    <h2>工艺图层（可选）</h2>
+    <p class="note" style="margin-top:0">没上传时，烫金/UV 靠颜色自动猜（金黄色→烫金，纯白→UV）。想要准确，就上传和设计稿<b>同尺寸、同版面</b>的黑白图：白色 = 做该工艺的地方（带透明通道的 PNG 则不透明处 = 工艺）。</p>
+    <div class="layer">
+      <div class="lhead"><b>烫金图层</b><span class="lstate" id="foilState"></span></div>
+      <div class="btns"><label class="btn" for="foilFile">上传</label><input id="foilFile" type="file" accept="image/*" hidden><button id="foilClear">清除</button></div>
+    </div>
+    <div class="layer">
+      <div class="lhead"><b>UV 图层</b><span class="lstate" id="uvState"></span></div>
+      <div class="btns"><label class="btn" for="uvFile">上传</label><input id="uvFile" type="file" accept="image/*" hidden><button id="uvClear">清除</button></div>
+    </div>
+    <div class="row"><label for="inv">黑色表示有工艺（反相）</label>
+      <span class="toggle"><input type="checkbox" id="inv"><i></i></span></div>
+    <div class="row"><label for="hilite">高亮显示工艺区域</label>
+      <span class="toggle"><input type="checkbox" id="hilite"><i></i></span></div>
+    <p class="note" style="margin-top:0">高亮：烫金 = 洋红，UV = 青色，用来检查图层有没有对准。</p>
+
+    <h2>展示</h2>
+    <div class="row"><label>灯光</label></div>
+    <div class="seg" id="light">
+      <button data-v="studio" class="on">影棚</button>
+      <button data-v="warm">暖光</button>
+      <button data-v="stage">展台</button>
+    </div>
+    <div class="row" style="margin-top:16px"><label>背景</label>
+      <div class="sw" id="bg"></div></div>
+    <div class="row"><label for="spin">自动旋转</label>
+      <span class="toggle"><input type="checkbox" id="spin" checked><i></i></span></div>
+    <div class="row"><label>视角</label></div>
+    <div class="seg" id="views">
+      <button data-v="iso">斜视</button>
+      <button data-v="front">正面</button>
+      <button data-v="side">侧面</button>
+      <button data-v="top">顶面</button>
+    </div>
+    <div class="btns" style="margin-top:16px">
+      <button class="btn-primary" id="shot" style="flex:1">导出效果图 PNG</button>
+    </div>
+  </aside>
+</div>
+
+<dialog id="dlg">
+  <div class="dlgHead"><b>贴图对位</b><button id="dlgClose">关闭</button></div>
+  <canvas id="dlgCanvas"></canvas>
+  <p class="note" id="dlgNote"></p>
+</dialog>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { RoomEnvironment } from 'three/addons/environments/RoomEnvironment.js';
+import { RoundedBoxGeometry } from 'three/addons/geometries/RoundedBoxGeometry.js';
+
+/* ---------- 示例设计 ---------- */
+const SAMPLES = [
+  { name: '示例：钱多多', src: './assets/design.jpg', dims: [450, 320, 260],
+    // 这张稿的折盖/箱身比例不是标准算法，用手工标定的矩形（原图 1748×1280 像素）
+    manual: { ref: [1748, 1280], front: [178, 437, 1005, 913], side: [1005, 437, 1590, 913], top: [178, 185, 1005, 437] } },
+  { name: '示例：发财雷王', src: './assets/design2.jpg', dims: [462, 278, 176] },
+];
+
+const S = { L: 450, W: 320, H: 260, film: 'matte', foil: true, foilRange: .3, foilStr: .75, foilTint: 'gold', inv: false, hilite: false,
+            uv: true, light: 'studio', bg: '#d9dce3', spin: true };
+const $ = s => document.querySelector(s);
+
+/* ---------- 渲染器 / 场景 ---------- */
+const canvasEl = $('#c');
+const renderer = new THREE.WebGLRenderer({ canvas: canvasEl, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(Math.max(devicePixelRatio, 2), 3));   // 至少 2x 超采样，边缘更锐
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.NoToneMapping;   // 不压对比度，设计稿颜色更接近原稿
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const scene = new THREE.Scene();
+const pmrem = new THREE.PMREMGenerator(renderer);
+scene.environment = pmrem.fromScene(new RoomEnvironment(), 0.04).texture;
+
+const camera = new THREE.PerspectiveCamera(32, 1, 0.1, 100);
+const controls = new OrbitControls(camera, canvasEl);
+controls.enableDamping = true; controls.dampingFactor = .08;
+controls.maxPolarAngle = Math.PI * 0.495;
+controls.autoRotateSpeed = 1.6;
+
+const key = new THREE.DirectionalLight(0xffffff, 2.2);
+key.castShadow = true;
+key.shadow.mapSize.set(2048, 2048);
+Object.assign(key.shadow.camera, { left: -4, right: 4, top: 4, bottom: -4, near: .5, far: 20 });
+key.shadow.bias = -0.0004; key.shadow.normalBias = 0.02; key.shadow.radius = 5;
+key.position.set(3.5, 6, 4);
+const fill = new THREE.DirectionalLight(0xbcd0ff, .6);
+fill.position.set(-4, 2.5, -3);
+const hemi = new THREE.HemisphereLight(0xffffff, 0x444455, .25);
+scene.add(key, fill, hemi);
+
+const LIGHTS = {
+  studio: { env: 1.0, key: 0xffffff, keyI: 2.2, fill: 0xbcd0ff, fillI: .6,  hemi: .25 },
+  warm:   { env: .75, key: 0xffc58a, keyI: 2.8, fill: 0xff7a3a, fillI: .9,  hemi: .15 },
+  stage:  { env: .5,  key: 0xffffff, keyI: 4.5, fill: 0x6e86ff, fillI: .5,  hemi: .05 },
+};
+
+/* ---------- 展台 ---------- */
+const disc = new THREE.Mesh(new THREE.CylinderGeometry(1, 1, .06, 96),
+  new THREE.MeshStandardMaterial({ roughness: .55, metalness: 0 }));
+disc.receiveShadow = true; scene.add(disc);
+
+/* ---------- 贴图处理 ---------- */
+const MAXW = Math.min(4096, renderer.capabilities.maxTextureSize);
+const clamp01 = v => v < 0 ? 0 : v > 1 ? 1 : v;
+const smooth = (a, b, x) => { const t = clamp01((x - a) / (b - a)); return t * t * (3 - 2 * t); };
+const mix = (a, b, t) => a + (b - a) * t;
+
+let design = null;      // HTMLImageElement
+let faces = {};         // front / side / top / bottom：{canvas, hsv}
+const maxAniso = renderer.capabilities.getMaxAnisotropy();
+
+function cropCanvas(img, frac, rotate180 = false) {
+  const sx = frac[0] * img.naturalWidth, sy = frac[1] * img.naturalHeight;
+  const sw = (frac[2] - frac[0]) * img.naturalWidth, sh = (frac[3] - frac[1]) * img.naturalHeight;
+  // 小图放大到至少 ~2048 宽（最多 2 倍），大图最多保留到 MAXW；放大用高质量重采样，再配合下面的自适应锐化
+  const k = sw < 2048 ? Math.min(2, 2048 / sw) : Math.min(1, MAXW / sw);
+  const c = document.createElement('canvas');
+  c.width = Math.round(sw * k); c.height = Math.round(sh * k);
+  const g = c.getContext('2d');
+  g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+  if (rotate180) { g.translate(c.width, c.height); g.rotate(Math.PI); }
+  g.drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+  c.srcWidth = sw;   // 原图里这块区域有多少像素宽（用来估算清晰度）
+  return c;
+}
+
+function plainCanvas(color) {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d'); g.fillStyle = color; g.fillRect(0, 0, 64, 64); return c;
+}
+
+function composeTop(img, topFrac, seam = true) {
+  // 顶面 = 前后两片折盖对接：前盖正放，后盖转 180°，中缝一条暗线
+  const flap = cropCanvas(img, topFrac);
+  const c = document.createElement('canvas');
+  c.width = flap.width; c.height = flap.height * 2;
+  const g = c.getContext('2d');
+  g.save(); g.translate(c.width, flap.height); g.rotate(Math.PI); g.drawImage(flap, 0, 0); g.restore();
+  g.drawImage(flap, 0, flap.height);
+  if (seam) { g.fillStyle = 'rgba(40,10,0,.55)'; g.fillRect(0, flap.height - 1.5, c.width, 3); }
+  return c;
+}
+
+function analyze(canvas) {
+  // 预先算好与滑块无关的部分（色相/饱和度索引、亮度项、UV 白色得分），拖滑块时只做查表
+  const { width: w, height: h } = canvas;
+  const px = canvas.getContext('2d', { willReadFrequently: true }).getImageData(0, 0, w, h).data;
+  const n = w * h, hi = new Uint16Array(n), si = new Uint8Array(n), pre = new Float32Array(n), uvs = new Float32Array(n);
+  for (let i = 0; i < n; i++) {
+    const r = px[i * 4] / 255, g = px[i * 4 + 1] / 255, b = px[i * 4 + 2] / 255;
+    const mx = Math.max(r, g, b), mn = Math.min(r, g, b), d = mx - mn;
+    let hue = 0;
+    if (d > 0) {
+      if (mx === r) hue = ((g - b) / d) % 6; else if (mx === g) hue = (b - r) / d + 2; else hue = (r - g) / d + 4;
+      hue *= 60; if (hue < 0) hue += 360;
+    }
+    const sat = mx === 0 ? 0 : d / mx;
+    hi[i] = Math.round(hue); si[i] = Math.round(sat * 255);
+    pre[i] = (1 - smooth(58, 64, hue)) * smooth(.5, .66, mx);
+    uvs[i] = (1 - smooth(.06, .15, sat)) * smooth(.88, .96, mx);
+  }
+  // 轻度锐化颜色图（贴图被放大时更清晰），只作用于显示用的颜色，不影响工艺识别
+  const base = new Uint8ClampedArray(px), a = w < 1800 ? .5 : w < 3200 ? .35 : .2;   // 图越小越需要锐化
+  for (let y = 1; y < h - 1; y++) for (let x = 1; x < w - 1; x++) {
+    const j = (y * w + x) * 4;
+    for (let c = 0; c < 3; c++) {
+      const v = px[j + c];
+      base[j + c] = v * (1 + 4 * a) - a * (px[j + c - 4] + px[j + c + 4] + px[j + c - w * 4] + px[j + c + w * 4]);
+    }
+  }
+  return { w, h, hi, si, pre, uvs, base };
+}
+
+function makeFace(canvas) { const f = analyze(canvas); f.srcWidth = canvas.srcWidth; return f; }
+
+/* 工艺图：R=局部UV/光油，G=粗糙度，B=金属度（three 的 clearcoat/roughness/metalness 分别读 R/G/B）
+   同时输出“烫金调色后”的颜色图 */
+function buildMaps(f) {
+  const { w, h } = f;
+  if (!f.orm) {
+    f.orm = Object.assign(document.createElement('canvas'), { width: w, height: h });
+    f.col = Object.assign(document.createElement('canvas'), { width: w, height: h });
+    f.ormData = new ImageData(w, h); f.colData = new ImageData(w, h);
+  }
+  const o = f.ormData.data, cd = f.colData.data, base = f.base;
+  const baseRough = { matte: .82, gloss: .3, none: .95 }[S.film];
+  const baseCoat = S.film === 'gloss' ? .55 : 0;
+  const hMin = 41 - S.foilRange * 16, sMin = .5 - S.foilRange * .14;
+  const hueLUT = new Float32Array(361), satLUT = new Float32Array(256);
+  for (let k = 0; k <= 360; k++) hueLUT[k] = smooth(hMin - 3, hMin + 2, k);
+  for (let k = 0; k < 256; k++) satLUT[k] = smooth(sMin - .1, sMin + .04, k / 255);
+  const foil = S.foil, uvOn = S.uv, str = S.foilStr, n = w * h, fm = f.fm, um = f.um, tint = S.foilTint, hil = S.hilite;
+  for (let i = 0, j = 0; i < n; i++, j += 4) {
+    const gold = foil ? (fm ? fm[i] : hueLUT[f.hi[i]] * satLUT[f.si[i]] * f.pre[i]) : 0;
+    const uv = uvOn ? (um ? um[i] : f.uvs[i]) : 0;
+    let rough = baseRough + (.24 - baseRough) * gold; rough += (.07 - rough) * uv;
+    o[j] = Math.max(baseCoat, uv) * 255; o[j + 1] = rough * 255; o[j + 2] = gold * str * 255; o[j + 3] = 255;
+    let r = base[j], g = base[j + 1], b = base[j + 2];
+    if (gold > .01) {   // 烫印区域把颜色调成金/银/玫瑰金箔
+      const l = .3 * r + .59 * g + .11 * b, t = gold * .7;
+      let tr, tg, tb;
+      if (tint === 'silver') { tr = tg = tb = Math.min(255, l * 1.1 + 30); tb = Math.min(255, tb + 6); }
+      else if (tint === 'rose') { tr = Math.min(255, l * 1.25 + 45); tg = l * .78 + 18; tb = l * .66 + 14; }
+      else { tr = Math.min(255, l * 1.3 + 40); tg = Math.min(255, l * .98 + 8); tb = l * .32; }
+      r += (tr - r) * t; g += (tg - g) * t; b += (tb - b) * t;
+    }
+    if (hil) {   // 检查对位：烫金洋红、UV 青色
+      if (gold > .01) { r += (255 - r) * gold * .8; g -= g * gold * .8; b += (200 - b) * gold * .8; }
+      if (uv > .01) { r -= r * uv * .8; g += (220 - g) * uv * .8; b += (255 - b) * uv * .8; }
+    }
+    cd[j] = r; cd[j + 1] = g; cd[j + 2] = b; cd[j + 3] = 255;
+  }
+  f.orm.getContext('2d').putImageData(f.ormData, 0, 0);
+  f.col.getContext('2d').putImageData(f.colData, 0, 0);
+}
+
+/* ---------- 材质 ---------- */
+function makeMat() {
+  return new THREE.MeshPhysicalMaterial({ roughness: 1, metalness: .85, clearcoat: 1, clearcoatRoughness: .06,
+    emissive: 0xffffff, emissiveIntensity: .04 });
+}
+const mats = { front: makeMat(), side: makeMat(), top: makeMat(), bottom: makeMat() };
+
+function newTex(canvas, srgb) {
+  const t = new THREE.CanvasTexture(canvas);
+  t.colorSpace = srgb ? THREE.SRGBColorSpace : THREE.NoColorSpace;
+  t.anisotropy = maxAniso;
+  return t;
+}
+
+function disposeTextures() {
+  for (const m of Object.values(mats)) {
+    for (const p of ['map', 'roughnessMap']) m[p]?.dispose();
+    m.map = m.emissiveMap = m.roughnessMap = m.metalnessMap = m.clearcoatMap = null; m.needsUpdate = true;
+  }
+}
+
+function refreshMaterials() {
+  for (const k of Object.keys(mats)) {
+    const m = mats[k], f = faces[k]; if (!f) continue;
+    buildMaps(f);
+    if (!m.map) {
+      m.map = m.emissiveMap = newTex(f.col, true);
+      m.roughnessMap = m.metalnessMap = m.clearcoatMap = newTex(f.orm, false);   // 同一张图驱动三个通道
+      m.needsUpdate = true;
+    } else { m.map.needsUpdate = true; m.roughnessMap.needsUpdate = true; }
+  }
+}
+
+function applyLight() {
+  const L = LIGHTS[S.light];
+  key.color.setHex(L.key); key.intensity = L.keyI;
+  fill.color.setHex(L.fill); fill.intensity = L.fillI;
+  hemi.intensity = L.hemi;
+  for (const m of Object.values(mats)) m.envMapIntensity = L.env;
+  disc.material.envMapIntensity = L.env;
+}
+
+function applyBackground() {
+  scene.background = new THREE.Color(S.bg);
+  const c = new THREE.Color(S.bg), lum = .2126 * c.r + .7152 * c.g + .0722 * c.b;
+  disc.material.color.copy(c).lerp(new THREE.Color(lum > .4 ? 0x000000 : 0xffffff), lum > .4 ? .05 : .1);
+}
+
+/* ---------- 箱体 ---------- */
+let box = null;
+function buildBox() {
+  if (box) { scene.remove(box); box.geometry.dispose(); }
+  const u = 1 / 100, L = S.L * u, H = S.H * u, W = S.W * u;
+  const geo = new RoundedBoxGeometry(L, H, W, 4, .018);
+  // 面序：+x -x +y -y +z -z
+  box = new THREE.Mesh(geo, [mats.side, mats.side, mats.top, mats.bottom, mats.front, mats.front]);
+  box.position.y = H / 2 + .03;
+  box.castShadow = true;
+  scene.add(box);
+  const R = Math.max(L, W) * .78;
+  disc.scale.set(R, 1, R); disc.position.y = 0;
+  controls.target.set(0, H / 2 + .03, 0);
+  controls.minDistance = Math.max(L, W, H) * 1.2;
+  controls.maxDistance = Math.max(L, W, H) * 6;
+}
+
+/* ---------- 加载设计 ---------- */
+function loadImage(src) {
+  return new Promise((res, rej) => { const i = new Image(); i.onload = () => res(i); i.onerror = rej; i.src = src; });
+}
+/* 版式：标准开口箱(0201)展开图 = 长+宽 的宽度，高 = 盖(宽/2) + 箱身(高) + 底(宽/2)。
+   只要找到裁切框（左边线 x0、右边线 x1、下边线 y1），其余位置按箱子尺寸算出来。 */
+let cur = { img: null, name: '', manual: null, frame: null, layout: null, note: '' };
+
+function detectFrame(img) {
+  const k = Math.min(1, 2400 / img.naturalWidth), w = Math.round(img.naturalWidth * k), h = Math.round(img.naturalHeight * k);
+  const c = Object.assign(document.createElement('canvas'), { width: w, height: h });
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.fillStyle = '#fff'; g.fillRect(0, 0, w, h); g.drawImage(img, 0, 0, w, h);
+  const d = g.getImageData(0, 0, w, h).data;
+  const nw = (x, y) => { const i = (y * w + x) * 4; return Math.min(d[i], d[i + 1], d[i + 2]) < 225; };
+  const rowF = new Float32Array(h);
+  for (let y = 0; y < h; y++) { let n = 0; for (let x = 0; x < w; x++) if (nw(x, y)) n++; rowF[y] = n / w; }
+  // 空白带 = 画面下方只剩裁切线的区域（单独一条横线也算空白）
+  const blank = new Uint8Array(h);
+  for (let y = 0; y < h; y++) {
+    const thin = rowF[y] > .5 && (y < 3 || rowF[y - 3] < .03) && (y + 3 >= h || rowF[y + 3] < .03);
+    blank[y] = rowF[y] < .03 || thin ? 1 : 0;
+  }
+  let best = null;
+  for (let y = 0; y < h;) {
+    if (!blank[y]) { y++; continue; }
+    const s0 = y; while (y < h && blank[y]) y++;
+    if (s0 > h * .4 && (!best || y - s0 > best.e - best.s)) best = { s: s0, e: y };
+  }
+  if (!best || best.e - best.s < h * .08) return null;
+  const rows = []; for (let y = best.s; y < best.e; y++) if (rowF[y] < .5) rows.push(y);
+  const cols = [];
+  for (let x = 0; x < w; x++) { let n = 0; for (const y of rows) if (nw(x, y)) n++; if (n / rows.length > .3) cols.push(x); }
+  const groups = [];
+  for (const x of cols) { const L = groups[groups.length - 1]; if (L && x - L[L.length - 1] <= 4) L.push(x); else groups.push([x]); }
+  const centers = groups.map(gr => gr.reduce((a, b) => a + b, 0) / gr.length);
+  if (centers.length < 3) return null;
+  const x0 = centers[0], x1 = centers[centers.length - 1];
+  const want = x0 + (x1 - x0) * S.L / (S.L + S.W);
+  const xm = centers.slice(1, -1).reduce((a, b) => Math.abs(b - want) < Math.abs(a - want) ? b : a);
+  let y1 = -1; for (let y = best.s; y < best.e; y++) if (rowF[y] > .5) y1 = y;
+  if (y1 < 0) { y1 = best.s; for (let y = best.s; y < best.e; y++) if (nw(Math.round(x0), y)) y1 = y; }
+  return { x0: x0 / k, xm: xm / k, x1: x1 / k, y1: y1 / k };
+}
+
+function computeLayout() {
+  const { img } = cur, iw = img.naturalWidth, ih = img.naturalHeight;
+  const clampR = r => [Math.max(0, r[0]), Math.max(0, r[1]), Math.min(iw, r[2]), Math.min(ih, r[3])];
+  const frac = r => [r[0] / iw, r[1] / ih, r[2] / iw, r[3] / ih];
+  if (cur.manual) {
+    const m = cur.manual, [rw, rh] = m.ref, f = r => [r[0] / rw, r[1] / rh, r[2] / rw, r[3] / rh];
+    cur.layout = { front: f(m.front), side: f(m.side), top: f(m.top) };
+    cur.rects = null; cur.note = '这张示例按手工标定的版式贴图。'; return;
+  }
+  const { L, W, H } = S;
+  let fr = cur.frame; const found = !!fr;
+  if (!fr) fr = { x0: iw * .05, x1: iw * .95, y1: ih * .95, xm: null };
+  const sc = (fr.x1 - fr.x0) / (L + W), y0 = fr.y1 - (W + H) * sc;
+  const yf = y0 + W / 2 * sc, yb = yf + H * sc;
+  let xm = fr.x0 + L * sc, warn = '';
+  if (fr.xm && Math.abs(fr.xm - xm) > iw * .03) { warn = '稿面上的左右分割线和你填的长/宽对不上，请核对尺寸。'; xm = fr.xm; }
+  const R = { front: clampR([fr.x0, yf, xm, yb]), side: clampR([xm, yf, fr.x1, yb]), top: clampR([fr.x0, y0, xm, yf]) };
+  cur.rects = R; cur.layout = { front: frac(R.front), side: frac(R.side), top: frac(R.top) };
+  cur.note = (found ? `已识别裁切线，按 ${L}×${W}×${H} mm 计算贴图位置。` :
+    '没找到裁切线，只能按整张图估算，贴图可能错位。设计稿里请保留裁切线。') + warn;
+}
+
+function rebuildFaces() {
+  computeLayout();
+  const img = cur.img, ly = cur.layout;
+  faces = {
+    front: makeFace(cropCanvas(img, ly.front)), side: makeFace(cropCanvas(img, ly.side)),
+    top: makeFace(composeTop(img, ly.top)), bottom: makeFace(plainCanvas('#b9895a')),
+  };
+  attachMasks();
+  disposeTextures();
+  refreshMaterials();
+  updateLayerUI();
+  // 清晰度提示：前面这块在原图里有多少像素，折算成印刷分辨率
+  const dpi = faces.front.srcWidth / S.L * 25.4;
+  cur.note += dpi < 100 ? ` ⚠ 原图偏小（前面约 ${Math.round(dpi)} dpi），放大会发软，建议导出更大的图。` : ` 清晰度约 ${Math.round(dpi)} dpi。`;
+  $('#layoutNote').textContent = cur.note;
+}
+
+
+/* ---------- 工艺图层：烫金 / UV 的黑白遮罩，按设计稿同样的版式裁到各个面 ---------- */
+function maskFromImage(img, key, face) {
+  const frac = cur.layout[key];
+  const src = key === 'top' ? composeTop(img, frac, false) : cropCanvas(img, frac);
+  const c = Object.assign(document.createElement('canvas'), { width: face.w, height: face.h });
+  const g = c.getContext('2d', { willReadFrequently: true });
+  g.imageSmoothingQuality = 'high'; g.drawImage(src, 0, 0, face.w, face.h);
+  const d = g.getImageData(0, 0, face.w, face.h).data;
+  let alphaMode = false;
+  for (let i = 3; i < d.length; i += 4) if (d[i] < 250) { alphaMode = true; break; }
+  const m = new Float32Array(face.w * face.h);
+  for (let i = 0, j = 0; i < m.length; i++, j += 4) {
+    let v = alphaMode ? d[j + 3] / 255 : (.3 * d[j] + .59 * d[j + 1] + .11 * d[j + 2]) / 255;
+    if (S.inv) v = 1 - v;
+    m[i] = smooth(.25, .75, v);
+  }
+  return m;
+}
+function attachMasks() {
+  for (const key of ['front', 'side', 'top']) {
+    const f = faces[key];
+    f.fm = cur.foilImg ? maskFromImage(cur.foilImg, key, f) : null;
+    f.um = cur.uvImg ? maskFromImage(cur.uvImg, key, f) : null;
+  }
+}
+function updateLayerUI() {
+  for (const k of ['foil', 'uv']) {
+    const el = $('#' + k + 'State'), has = !!cur[k + 'Img'];
+    if (!has) { el.textContent = '未上传 · 自动识别'; el.className = 'lstate'; }
+    else if (cur[k + 'Warn']) { el.textContent = '尺寸和设计稿不一致，已拉伸，请检查'; el.className = 'lstate warn'; }
+    else { el.textContent = '已使用：' + cur[k + 'Name']; el.className = 'lstate'; }
+    el.title = el.textContent;
+  }
+  $('#foilRange').disabled = !!cur.foilImg;
+}
+async function loadLayer(kind, file) {
+  if (!cur.img || !file || !file.type.startsWith('image/')) return;
+  try {
+    const img = await loadImage(URL.createObjectURL(file));
+    cur[kind + 'Img'] = img; cur[kind + 'Name'] = file.name;
+    cur[kind + 'Warn'] = Math.abs((img.naturalWidth / img.naturalHeight) / (cur.img.naturalWidth / cur.img.naturalHeight) - 1) > .01;
+    attachMasks(); refreshMaterials(); updateLayerUI();
+    if (kind === 'foil') { S.foil = true; $('#foil').checked = true; $('#foilSub').classList.remove('off'); }
+    if (kind === 'uv') { S.uv = true; $('#uv').checked = true; }
+  } catch { alert('这张图层图片无法读取，请换一张 PNG / JPG'); }
+}
+function clearLayer(kind) {
+  cur[kind + 'Img'] = null; cur[kind + 'Warn'] = false;
+  attachMasks(); refreshMaterials(); updateLayerUI();
+}
+
+function setDims(L, W, H) {
+  Object.assign(S, { L, W, H });
+  $('#dL').value = L; $('#dW').value = W; $('#dH').value = H;
+  buildBox();
+}
+
+async function setDesign(img, name, sample) {
+  design = img;
+  cur = { img, name, manual: sample?.manual || null, frame: null, layout: null, note: '', foilImg: null, uvImg: null };
+  if (sample) setDims(...sample.dims);
+  if (!cur.manual) cur.frame = detectFrame(img);
+  rebuildFaces();
+  $('#thumb').src = img.src; $('#thumbName').textContent = name;
+  $('#thumbSize').textContent = `${img.naturalWidth} × ${img.naturalHeight} px`;
+  $('#loading').classList.add('off');
+}
+async function loadSample(i) { const sp = SAMPLES[i]; await setDesign(await loadImage(sp.src), sp.name, sp); }
+const loadDefault = () => loadSample(0);
+
+function showLayout() {
+  if (!cur.img) return;
+  const img = cur.img, k = Math.min(1, 1000 / img.naturalWidth) ;
+  const c = $('#dlgCanvas'); c.width = Math.round(img.naturalWidth * k); c.height = Math.round(img.naturalHeight * k);
+  const g = c.getContext('2d'); g.drawImage(img, 0, 0, c.width, c.height);
+  const rects = cur.rects || (() => { const m = cur.manual, q = m.ref[0] / img.naturalWidth;
+    return { front: m.front.map(v => v / q), side: m.side.map(v => v / q), top: m.top.map(v => v / q) }; })();
+  const col = { front: '#00c853', side: '#2979ff', top: '#ff1744' }, name = { front: '前/后面', side: '左/右面', top: '顶盖' };
+  g.lineWidth = 3; g.font = 'bold 16px sans-serif';
+  for (const key of ['front', 'side', 'top']) {
+    const r = rects[key].map(v => v * k);
+    g.strokeStyle = col[key]; g.strokeRect(r[0], r[1], r[2] - r[0], r[3] - r[1]);
+    g.fillStyle = col[key]; g.fillRect(r[0], r[1], 74, 24); g.fillStyle = '#fff'; g.fillText(name[key], r[0] + 5, r[1] + 18);
+  }
+  $('#dlgNote').textContent = '彩色框就是贴到箱子各面的区域。框没对准设计稿的话，说明裁切线没识别对或尺寸填错了。';
+  $('#dlg').showModal();
+}
+
+async function loadFile(file) {
+  if (!file || !file.type.startsWith('image/')) return;
+  const url = URL.createObjectURL(file);
+  try { await setDesign(await loadImage(url), file.name); } catch { alert('这张图片无法读取，请换一张 PNG / JPG'); }
+}
+
+/* ---------- 视角动画 ---------- */
+let tween = null;
+function goView(name) {
+  const d = Math.max(S.L, S.W, S.H) / 100 * 2.7;
+  const dirs = { iso: [.75, .5, 1], front: [0, .12, 1], side: [1, .12, 0], top: [0, 1, .001] };
+  const to = new THREE.Vector3(...dirs[name]).normalize().multiplyScalar(d).add(controls.target);
+  tween = { from: camera.position.clone(), to, t0: performance.now(), dur: 750 };
+  setSpin(false);
+}
+
+/* ---------- UI ---------- */
+function seg(id, key, cb) {
+  const el = $(id);
+  el.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    if (key) { S[key] = b.dataset.v; el.querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); }
+    cb(b.dataset.v);
+  });
+}
+function setSpin(v) { S.spin = v; $('#spin').checked = v; controls.autoRotate = v; }
+
+seg('#film', 'film', () => refreshMaterials());
+seg('#light', 'light', applyLight);
+seg('#views', null, goView);
+
+const swatches = [['#d9dce3', '影棚灰'], ['#ffffff', '纯白'], ['#4a1c14', '暖红'], ['#0b0b10', '深黑']];
+for (const [c, name] of swatches) {
+  const b = document.createElement('button'); b.style.background = c; b.title = name; b.setAttribute('aria-label', name);
+  if (c === S.bg) b.classList.add('on');
+  b.onclick = () => { S.bg = c; applyBackground(); $('#bg').querySelectorAll('button').forEach(x => x.classList.toggle('on', x === b)); };
+  $('#bg').append(b);
+}
+
+let pending = false;
+const scheduleRefresh = () => { if (pending) return; pending = true; requestAnimationFrame(() => { pending = false; refreshMaterials(); }); };
+
+$('#foil').onchange = e => { S.foil = e.target.checked; $('#foilSub').classList.toggle('off', !S.foil); scheduleRefresh(); };
+seg('#tint', 'foilTint', () => refreshMaterials());
+$('#foilFile').onchange = e => { loadLayer('foil', e.target.files[0]); e.target.value = ''; };
+$('#uvFile').onchange = e => { loadLayer('uv', e.target.files[0]); e.target.value = ''; };
+$('#foilClear').onclick = () => clearLayer('foil');
+$('#uvClear').onclick = () => clearLayer('uv');
+$('#inv').onchange = e => { S.inv = e.target.checked; if (cur.foilImg || cur.uvImg) { attachMasks(); refreshMaterials(); } };
+$('#hilite').onchange = e => { S.hilite = e.target.checked; refreshMaterials(); };
+$('#uv').onchange = e => { S.uv = e.target.checked; scheduleRefresh(); };
+$('#foilRange').oninput = e => { S.foilRange = e.target.value / 100; $('#foilRangeV').textContent = e.target.value + '%'; scheduleRefresh(); };
+$('#foilStr').oninput = e => { S.foilStr = e.target.value / 100; $('#foilStrV').textContent = e.target.value + '%'; scheduleRefresh(); };
+$('#foilRangeV').textContent = '30%'; $('#foilStrV').textContent = '75%';
+$('#spin').onchange = e => setSpin(e.target.checked);
+
+for (const [id, k] of [['#dL', 'L'], ['#dW', 'W'], ['#dH', 'H']]) {
+  const el = $(id); el.value = S[k];
+  el.onchange = () => { S[k] = Math.min(900, Math.max(100, +el.value || S[k])); el.value = S[k]; buildBox(); if (cur.img && !cur.manual) rebuildFaces(); };
+}
+
+$('#file').onchange = e => { loadFile(e.target.files[0]); e.target.value = ''; };
+$('#sample').onchange = e => loadSample(+e.target.value);
+$('#viewLayout').onclick = showLayout;
+$('#dlgClose').onclick = () => $('#dlg').close();
+
+const stage = $('#stage');
+['dragenter', 'dragover'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.add('dragging'); }));
+['dragleave', 'drop'].forEach(t => stage.addEventListener(t, e => { e.preventDefault(); stage.classList.remove('dragging'); }));
+stage.addEventListener('drop', e => loadFile(e.dataTransfer.files[0]));
+
+$('#shot').onclick = () => {
+  const prev = renderer.getPixelRatio();
+  renderer.setPixelRatio(2); resize(); renderer.render(scene, camera);
+  const a = document.createElement('a');
+  a.href = canvasEl.toDataURL('image/png'); a.download = '烟花外箱效果图.png'; a.click();
+  renderer.setPixelRatio(prev); resize();
+};
+
+controls.addEventListener('start', () => { tween = null; if (S.spin) setSpin(false); });
+
+/* ---------- 循环 ---------- */
+function resize() {
+  const w = stage.clientWidth, h = stage.clientHeight; if (!w || !h) return;
+  renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(stage);
+
+function frame(t) {
+  if (tween) {
+    const k = Math.min(1, (t - tween.t0) / tween.dur), e = 1 - Math.pow(1 - k, 3);
+    camera.position.lerpVectors(tween.from, tween.to, e);
+    if (k >= 1) tween = null;
+  }
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(frame);
+}
+
+/* ---------- 启动 ---------- */
+applyLight(); applyBackground(); buildBox(); resize();
+const d0 = Math.max(S.L, S.W, S.H) / 100 * 2.7;
+camera.position.set(.75, .5, 1).normalize().multiplyScalar(d0).add(controls.target);
+controls.autoRotate = true;
+loadDefault().catch(() => { $('#loading').textContent = '设计图加载失败，请用本地服务器打开（见说明）'; });
+requestAnimationFrame(frame);
+window.__app = { S, THREE, scene, camera, controls, renderer };
+</script>
+</body>
+</html>
